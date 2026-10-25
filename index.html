@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copper Supply Globe | Port-to-Port Flows</title>
+<style>
+:root{--bg:#070b14;--panel:rgba(14,20,34,.88);--line:#22304a;--text:#e6edf7;--mute:#8a9bb8;--cu:#e8943a;--dest:#4fd1c5}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+#globe{position:fixed;inset:0}
+aside{position:fixed;top:14px;left:14px;bottom:14px;width:340px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;backdrop-filter:blur(8px);z-index:5}
+h1{font-size:18px;margin:0}h1 span{color:var(--cu)}
+.sub{font-size:12px;color:var(--mute);margin-top:3px}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kpi{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:10px}
+.kpi b{display:block;font-size:20px}.kpi small{color:var(--mute);font-size:11px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+button{background:#0b1220;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
+button.on{background:var(--cu);border-color:var(--cu);color:#1a1006;font-weight:600}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:0}
+#list{overflow:auto;display:flex;flex-direction:column;gap:6px;flex:1;padding-right:2px}
+.row{padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer;background:#0b1220}
+.row:hover{border-color:var(--cu)}
+.row .t{display:flex;justify-content:space-between;font-size:13px}
+.bar{height:4px;border-radius:2px;background:linear-gradient(90deg,var(--cu),var(--dest));margin-top:6px}
+.row small{color:var(--mute);font-size:11px}
+.legend{font-size:11px;color:var(--mute);display:flex;gap:12px;align-items:center}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.note{font-size:10.5px;color:var(--mute)}
+.tip{font:12px system-ui;padding:8px 10px;background:#0b1220;border:1px solid var(--line);border-radius:8px;color:var(--text)}
+@media(max-width:760px){aside{top:auto;left:8px;right:8px;bottom:8px;width:auto;height:44vh}.kpis{grid-template-columns:repeat(4,1fr)}.kpi b{font-size:15px}}
+</style>
+</head>
+<body>
+<div id="globe"></div>
+<aside>
+  <div><h1><span>Cu</span> Copper Supply Globe</h1><div class="sub">Port-to-port seaborne flows, kt per year</div></div>
+  <div class="kpis">
+    <div class="kpi"><b id="k1">-</b><small>Total volume (kt)</small></div>
+    <div class="kpi"><b id="k2">-</b><small>Routes</small></div>
+    <div class="kpi"><b id="k3">-</b><small>Ports</small></div>
+    <div class="kpi"><b id="k4">-</b><small>Top destination</small></div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="legend"><span><i class="dot" style="background:var(--cu)"></i>Origin port</span><span><i class="dot" style="background:var(--dest)"></i>Destination port</span></div>
+  <h2>Routes by volume</h2>
+  <div id="list"></div>
+  <div class="note">Volumes are illustrative estimates. Edit <code>data.js</code> section below to use your own data.</div>
+</aside>
+
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.27.2/dist/globe.gl.min.js"></script>
+<script>
+/* ---------- DATA (edit me) ---------- */
+const PORTS = {
+  "Antofagasta":[-23.65,-70.40,"Chile"],"Mejillones":[-23.10,-70.45,"Chile"],"San Antonio":[-33.59,-71.61,"Chile"],
+  "Callao":[-12.05,-77.15,"Peru"],"Matarani":[-17.00,-72.11,"Peru"],
+  "Vancouver":[49.29,-123.11,"Canada"],"Port Adelaide":[-34.80,138.50,"Australia"],
+  "Amamapare":[-4.83,136.83,"Indonesia"],"Beira":[-19.83,34.84,"Mozambique"],"Dar es Salaam":[-6.83,39.29,"Tanzania"],"Durban":[-29.87,31.03,"South Africa"],
+  "Tianjin":[38.99,117.75,"China"],"Qingdao":[36.07,120.32,"China"],"Shanghai":[30.63,122.06,"China"],"Ningbo":[29.87,121.55,"China"],"Nansha":[22.75,113.60,"China"],
+  "Chiba":[35.60,140.10,"Japan"],"Onsan":[35.47,129.37,"South Korea"],"Mundra":[22.74,69.70,"India"],
+  "Hamburg":[53.54,9.98,"Germany"],"Huelva":[37.26,-6.95,"Spain"],"Rotterdam":[51.95,4.14,"Netherlands"],"Los Angeles":[33.73,-118.26,"USA"]
+};
+// [from, to, kt/yr, type]
+const ROUTES = [
+  ["Antofagasta","Shanghai",520,"Cathode"],["Mejillones","Qingdao",430,"Concentrate"],["Antofagasta","Tianjin",360,"Concentrate"],
+  ["San Antonio","Ningbo",310,"Cathode"],["Antofagasta","Chiba",280,"Concentrate"],["Mejillones","Onsan",240,"Concentrate"],
+  ["Antofagasta","Hamburg",150,"Cathode"],["San Antonio","Rotterdam",120,"Cathode"],["Antofagasta","Mundra",170,"Concentrate"],
+  ["Callao","Tianjin",340,"Concentrate"],["Matarani","Nansha",260,"Concentrate"],["Callao","Chiba",190,"Concentrate"],
+  ["Matarani","Huelva",140,"Concentrate"],["Callao","Hamburg",90,"Concentrate"],
+  ["Amamapare","Chiba",230,"Concentrate"],["Amamapare","Onsan",180,"Concentrate"],["Amamapare","Mundra",120,"Concentrate"],
+  ["Port Adelaide","Shanghai",160,"Cathode"],["Port Adelaide","Onsan",110,"Cathode"],
+  ["Dar es Salaam","Shanghai",280,"Cathode"],["Beira","Nansha",180,"Cathode"],["Durban","Tianjin",130,"Cathode"],
+  ["Vancouver","Qingdao",200,"Concentrate"],["Vancouver","Chiba",100,"Concentrate"],["Los Angeles","Ningbo",95,"Cathode"]
+].map(([f,t,v,type])=>({from:f,to:t,vol:v,type,
+  startLat:PORTS[f][0],startLng:PORTS[f][1],endLat:PORTS[t][0],endLng:PORTS[t][1]}));
+/* ------------------------------------ */
+
+const origins = new Set(ROUTES.map(r=>r.from));
+let filter = "All", focus = null;
+const fmt = n => n.toLocaleString("en-US");
+
+const globe = Globe()(document.getElementById("globe"))
+  .globeImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-night.jpg")
+  .bumpImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-topology.png")
+  .backgroundImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/night-sky.png")
+  .atmosphereColor("#e8943a").atmosphereAltitude(0.18)
+  .arcColor(d=>[ "rgba(232,148,58,.95)","rgba(79,209,197,.95)"])
+  .arcStroke(d=>0.15+d.vol/900)
+  .arcAltitudeAutoScale(0.45)
+  .arcDashLength(0.45).arcDashGap(0.2).arcDashAnimateTime(d=>3500+Math.random()*1500)
+  .arcLabel(d=>`<div class="tip"><b>${d.from} → ${d.to}</b><br>${fmt(d.vol)} kt/yr · ${d.type}</div>`)
+  .onArcClick(d=>{focus=d;fly((d.startLat+d.endLat)/2,(d.startLng+d.endLng)/2,2.0);})
+  .pointLat(d=>d.lat).pointLng(d=>d.lng).pointAltitude(0.01).pointRadius(0.35)
+  .pointColor(d=>d.origin?"#e8943a":"#4fd1c5")
+  .pointLabel(d=>`<div class="tip"><b>${d.name}</b>, ${d.country}<br>${d.origin?"Exports":"Imports"}: ${fmt(d.vol)} kt/yr</div>`)
+  .ringLat(d=>d.lat).ringLng(d=>d.lng).ringColor(d=>t=>(d.origin?`rgba(232,148,58,${1-t})`:`rgba(79,209,197,${1-t})`))
+  .ringMaxRadius(3).ringPropagationSpeed(1.4).ringRepeatPeriod(1800)
+  .labelLat(d=>d.lat).labelLng(d=>d.lng).labelText(d=>d.name).labelSize(0.5).labelDotRadius(0)
+  .labelColor(()=>"rgba(230,237,247,.8)").labelResolution(2).labelAltitude(0.012);
+
+globe.controls().autoRotate = true;
+globe.controls().autoRotateSpeed = 0.35;
+globe.pointOfView({lat:15,lng:-20,altitude:2.4});
+function fly(lat,lng,alt){globe.controls().autoRotate=false;globe.pointOfView({lat,lng,altitude:alt},1200);}
+document.getElementById("globe").addEventListener("pointerdown",()=>globe.controls().autoRotate=false);
+
+function render(){
+  const rs = ROUTES.filter(r=>filter==="All"||r.type===filter).sort((a,b)=>b.vol-a.vol);
+  globe.arcsData(rs);
+  const agg = {};
+  rs.forEach(r=>{
+    (agg[r.from] ||= {name:r.from,origin:true,vol:0}).vol += r.vol;
+    (agg[r.to] ||= {name:r.to,origin:origins.has(r.to),vol:0}).vol += r.vol;
+  });
+  // origin/destination volumes separately for tooltip accuracy
+  const pts = Object.values(agg).map(p=>{
+    const isO = rs.some(r=>r.from===p.name);
+    const vol = rs.filter(r=>(isO?r.from:r.to)===p.name).reduce((s,r)=>s+r.vol,0);
+    return {name:p.name,lat:PORTS[p.name][0],lng:PORTS[p.name][1],country:PORTS[p.name][2],origin:isO,vol};
+  });
+  globe.pointsData(pts).ringsData(pts).labelsData(pts);
+
+  const total = rs.reduce((s,r)=>s+r.vol,0);
+  const dest = {}; rs.forEach(r=>dest[r.to]=(dest[r.to]||0)+r.vol);
+  const top = Object.entries(dest).sort((a,b)=>b[1]-a[1])[0];
+  k1.textContent=fmt(total); k2.textContent=rs.length; k3.textContent=pts.length; k4.textContent=top?top[0]:"-";
+
+  const max = rs[0]?.vol||1;
+  list.innerHTML = rs.map((r,i)=>`<div class="row" data-i="${i}"><div class="t"><span>${r.from} → ${r.to}</span><b>${fmt(r.vol)}</b></div>
+    <small>${r.type} · ${PORTS[r.from][2]} → ${PORTS[r.to][2]}</small><div class="bar" style="width:${r.vol/max*100}%"></div></div>`).join("");
+  list.querySelectorAll(".row").forEach(el=>el.onclick=()=>{const r=rs[el.dataset.i];fly((r.startLat+r.endLat)/2,(r.startLng+r.endLng)/2,2.0);});
+}
+const tabs=document.getElementById("tabs");
+["All","Concentrate","Cathode"].forEach(f=>{
+  const b=document.createElement("button");b.textContent=f;if(f==="All")b.className="on";
+  b.onclick=()=>{filter=f;[...tabs.children].forEach(x=>x.className="");b.className="on";render();};
+  tabs.appendChild(b);
+});
+const k1=document.getElementById("k1"),k2=document.getElementById("k2"),k3=document.getElementById("k3"),k4=document.getElementById("k4"),list=document.getElementById("list");
+render();
+addEventListener("resize",()=>globe.width(innerWidth).height(innerHeight));
+</script>
+</body>
+</html>
