@@ -80,16 +80,28 @@ const origins = new Set(ROUTES.map(r=>r.from));
 let filter = "All", focus = null;
 const fmt = n => n.toLocaleString("en-US");
 
+let hover = null;
+const arcStr = d => (0.25 + d.vol/700) * (d===hover ? 1.8 : 1);
+const arcCol = d => hover && d!==hover ? ["rgba(232,148,58,.15)","rgba(79,209,197,.15)"]
+  : d===hover ? ["#ffb866","#7ff5ea"] : ["rgba(232,148,58,.9)","rgba(79,209,197,.9)"];
+function refreshArcs(){globe.arcColor(arcCol).arcStroke(arcStr);}
 const globe = Globe()(document.getElementById("globe"))
   .globeImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-night.jpg")
   .bumpImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-topology.png")
   .backgroundImageUrl("https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/night-sky.png")
   .atmosphereColor("#e8943a").atmosphereAltitude(0.18)
-  .arcColor(d=>[ "rgba(232,148,58,.95)","rgba(79,209,197,.95)"])
-  .arcStroke(d=>0.15+d.vol/900)
-  .arcAltitudeAutoScale(0.45)
-  .arcDashLength(0.45).arcDashGap(0.2).arcDashAnimateTime(d=>3500+Math.random()*1500)
-  .arcLabel(d=>`<div class="tip"><b>${d.from} → ${d.to}</b><br>${fmt(d.vol)} kt/yr · ${d.type}</div>`)
+  .arcColor(arcCol).arcStroke(arcStr)
+  .arcAltitudeAutoScale(0.45).arcCurveResolution(64)
+  .arcDashLength(1).arcDashGap(0).arcDashAnimateTime(0)
+  .arcsTransitionDuration(0)
+  .onArcHover(d=>{hover=d;refreshArcs();document.body.style.cursor=d?"pointer":"";})
+  .arcLabel(d=>{
+    const pair=ROUTES.filter(r=>r.from===d.from&&r.to===d.to);
+    const tot=pair.reduce((s,r)=>s+r.vol,0);
+    const all=ROUTES.reduce((s,r)=>s+r.vol,0);
+    return `<div class="tip"><b>${d.from} → ${d.to}</b><br>${PORTS[d.from][2]} → ${PORTS[d.to][2]}<hr style="border:0;border-top:1px solid #22304a;margin:6px 0">
+    Supply: <b style="color:#e8943a">${fmt(d.vol)} kt/yr</b> (${d.type})<br>
+    ${pair.length>1?`Total on this lane: <b>${fmt(tot)} kt/yr</b><br>`:""}Share of network: ${(tot/all*100).toFixed(1)}%</div>`;})
   .onArcClick(d=>{focus=d;fly((d.startLat+d.endLat)/2,(d.startLng+d.endLng)/2,2.0);})
   .pointLat(d=>d.lat).pointLng(d=>d.lng).pointAltitude(0.01).pointRadius(0.35)
   .pointColor(d=>d.origin?"#e8943a":"#4fd1c5")
@@ -107,7 +119,7 @@ document.getElementById("globe").addEventListener("pointerdown",()=>globe.contro
 
 function render(){
   const rs = ROUTES.filter(r=>filter==="All"||r.type===filter).sort((a,b)=>b.vol-a.vol);
-  globe.arcsData(rs);
+  hover=null;globe.arcsData(rs);
   const agg = {};
   rs.forEach(r=>{
     (agg[r.from] ||= {name:r.from,origin:true,vol:0}).vol += r.vol;
@@ -129,6 +141,7 @@ function render(){
   const max = rs[0]?.vol||1;
   list.innerHTML = rs.map((r,i)=>`<div class="row" data-i="${i}"><div class="t"><span>${r.from} → ${r.to}</span><b>${fmt(r.vol)}</b></div>
     <small>${r.type} · ${PORTS[r.from][2]} → ${PORTS[r.to][2]}</small><div class="bar" style="width:${r.vol/max*100}%"></div></div>`).join("");
+  list.querySelectorAll(".row").forEach(el=>{el.onmouseenter=()=>{hover=rs[el.dataset.i];refreshArcs();};el.onmouseleave=()=>{hover=null;refreshArcs();};});
   list.querySelectorAll(".row").forEach(el=>el.onclick=()=>{const r=rs[el.dataset.i];fly((r.startLat+r.endLat)/2,(r.startLng+r.endLng)/2,2.0);});
 }
 const tabs=document.getElementById("tabs");
